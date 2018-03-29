@@ -10,6 +10,8 @@ An effective,fast,stable log extension for PHP
 
 [English Document](https://github.com/SeasX/SeasLog/blob/master/README.md)
 
+[日志规范](https://github.com/SeasX/SeasLog/blob/master/Specification/README_zh.md)
+
 > ---
 - **[简介](#简介)**
     - **[为什么使用SeasLog](#为什么使用seaslog)**
@@ -97,7 +99,7 @@ $ pecl install seaslog
 ```
 
 ### Windows环境中使用SeasLog
-到PECL/SeasLog主页找到对应的dll进行安装 [PECL/SeasLog Windows Dll](http://pecl.php.net/package/SeasLog/1.6.0/windows)
+到PECL/SeasLog主页找到对应的dll进行安装 [PECL/SeasLog Windows Dll](http://pecl.php.net/package/SeasLog/1.8.4/windows)
 
 ### seaslog.ini的配置
 ```conf
@@ -117,8 +119,11 @@ seaslog.default_datetime_format = "Y-m-d H:i:s"
 ;日志格式模板 默认"%T | %L | %P | %Q | %t | %M"
 seaslog.default_template = "%T | %L | %P | %Q | %t | %M"
 
+;是否以目录区分Logger 1是(默认) 0否
+seaslog.disting_folder = 1
+
 ;是否以type分文件 1是 0否(默认)
-seaslog.disting_type = 1
+seaslog.disting_type = 0
 
 ;是否每小时划分一个文件 1是 0否(默认)
 seaslog.disting_by_hour = 0
@@ -172,6 +177,8 @@ seaslog.throw_exception = 1
 ;是否开启忽略SeasLog自身warning  1开启(默认) 0否
 seaslog.ignore_warning = 1
 ```
+> `seaslog.disting_folder = 1` 开启以目录分文件，即logger以目录区分。当关闭时，logger以下划线拼接时间, 如default_20180211.log。
+
 > `seaslog.disting_type = 1` 开启以type分文件，即log文件区分info\warn\erro
 
 > `seaslog.disting_by_hour = 1` 开启每小时划分一个文件
@@ -211,7 +218,6 @@ seaslog.ignore_warning = 1
 * 意味着，默认的格式为`{dateTime} | {level} | {pid} | {uniqid} | {timeStamp} | {logInfo}`
 * 如果自定义的格式为：`seaslog.default_template = "[%T]:%L %P %Q %t %M" `
 * 那么，日志格式将被自定义为：`[{dateTime}]:{level} {pid} {uniqid} {timeStamp} {logInfo}`
-> 注意：`%L` 必须在`%M`之前，即：日志级别，必须在日志内容之前。
 
 #### 预设变量表
 `SeasLog`提供了下列预设变量，可以直接使用在日志模板中，将在日志最终生成时替换成对应值。
@@ -227,6 +233,8 @@ seaslog.ignore_warning = 1
 * `%m` - Request Method 请求类型，如`GET`; Cli模式下为执行命令，如`/bin/bash`。
 * `%I` - Client IP 来源客户端IP; Cli模式下为`local`。取值优先级为：HTTP_X_REAL_IP > HTTP_X_FORWARDED_FOR > REMOTE_ADDR
 * `%F` - FileName:LineNo 文件名:行号，如`UserService.php:118`。
+* `%U` - MemoryUsage 当前内容使用量，单位byte。调用`zend_memory_usage`。
+* `%u` - PeakMemoryUsage 当前内容使用峰值量，单位byte。调用`zend_memory_peak_usage`。
 * `%C` - `TODO` Class::Action 类名::方法名，如`UserService::getUserInfo`。
 
 ## 使用
@@ -537,7 +545,7 @@ class SeasLog
 ```php
 /usr/local/php/php-7.0.6-zts-debug/bin/php --re seaslog
 
-Extension [ <persistent> extension #32 SeasLog version 1.6.9 ] {
+Extension [ <persistent> extension #29 SeasLog version 1.8.4 ] {
 
   - Dependencies {
   }
@@ -547,13 +555,16 @@ Extension [ <persistent> extension #32 SeasLog version 1.6.9 ] {
       Current = '/var/log/www'
     }
     Entry [ seaslog.default_logger <ALL> ]
-      Current = 'defauult'
+      Current = 'default'
     }
     Entry [ seaslog.default_datetime_format <ALL> ]
       Current = 'Y-m-d H:i:s'
     }
     Entry [ seaslog.default_template <ALL> ]
-      Current = '%L | %P | %Q | %t | %T | %M'
+      Current = '%T | %L | %P | %Q | %t | %M'
+    }
+    Entry [ seaslog.disting_folder <ALL> ]
+      Current = '1'
     }
     Entry [ seaslog.disting_type <ALL> ]
       Current = '0'
@@ -562,22 +573,34 @@ Extension [ <persistent> extension #32 SeasLog version 1.6.9 ] {
       Current = '0'
     }
     Entry [ seaslog.use_buffer <ALL> ]
-      Current = '1'
+      Current = '0'
+    }
+    Entry [ seaslog.trace_notice <ALL> ]
+      Current = '0'
+    }
+    Entry [ seaslog.trace_warning <ALL> ]
+      Current = '0'
     }
     Entry [ seaslog.trace_error <ALL> ]
       Current = '1'
     }
     Entry [ seaslog.trace_exception <ALL> ]
-      Current = '1'
+      Current = '0'
     }
     Entry [ seaslog.buffer_size <ALL> ]
-      Current = '10'
+      Current = '0'
     }
     Entry [ seaslog.level <ALL> ]
+      Current = '8'
+    }
+    Entry [ seaslog.recall_depth <ALL> ]
       Current = '0'
     }
     Entry [ seaslog.appender <ALL> ]
       Current = '1'
+    }
+    Entry [ seaslog.appender_retry <ALL> ]
+      Current = '0'
     }
     Entry [ seaslog.remote_host <ALL> ]
       Current = '127.0.0.1'
@@ -597,7 +620,7 @@ Extension [ <persistent> extension #32 SeasLog version 1.6.9 ] {
   }
 
   - Constants [16] {
-    Constant [ string SEASLOG_VERSION ] { 1.7.5 }
+    Constant [ string SEASLOG_VERSION ] { 1.8.4 }
     Constant [ string SEASLOG_AUTHOR ] { Chitao.Gao  [ neeke@php.net ] }
     Constant [ string SEASLOG_ALL ] { ALL }
     Constant [ string SEASLOG_DEBUG ] { DEBUG }
@@ -631,7 +654,7 @@ Extension [ <persistent> extension #32 SeasLog version 1.6.9 ] {
       - Static properties [0] {
       }
 
-      - Static methods [19] {
+      - Static methods [21] {
         Method [ <internal:SeasLog> static public method setBasePath ] {
 
           - Parameters [1] {
