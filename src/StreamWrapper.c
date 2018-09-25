@@ -14,7 +14,11 @@
   +----------------------------------------------------------------------+
 */
 
-static php_stream *seaslog_stream_open_wrapper(char *opt TSRMLS_DC)
+#include "StreamWrapper.h"
+#include "ErrorHook.h"
+#include "ExceptionHook.h"
+
+php_stream *seaslog_stream_open_wrapper(char *opt TSRMLS_DC)
 {
     php_stream *stream = NULL;
     char *res = NULL;
@@ -30,7 +34,7 @@ static php_stream *seaslog_stream_open_wrapper(char *opt TSRMLS_DC)
     {
     case SEASLOG_APPENDER_TCP:
         reslen = spprintf(&res, 0, "tcp://%s:%d", SEASLOG_G(remote_host), SEASLOG_G(remote_port));
-        stream = php_stream_xport_create(res, reslen, REPORT_ERRORS, STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT, 0, 0, NULL, NULL, NULL);
+        stream = php_stream_xport_create(res, reslen, REPORT_ERRORS, STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT, 0, &SEASLOG_G(remote_timeout_real), NULL, NULL, NULL);
 
         if (stream == NULL)
         {
@@ -44,7 +48,7 @@ static php_stream *seaslog_stream_open_wrapper(char *opt TSRMLS_DC)
 
     case SEASLOG_APPENDER_UDP:
         reslen = spprintf(&res, 0, "udp://%s:%d", SEASLOG_G(remote_host), SEASLOG_G(remote_port));
-        stream = php_stream_xport_create(res, reslen, REPORT_ERRORS, STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT, 0, 0, NULL, NULL, NULL);
+        stream = php_stream_xport_create(res, reslen, REPORT_ERRORS, STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT, 0, &SEASLOG_G(remote_timeout_real), NULL, NULL, NULL);
 
         if (stream == NULL)
         {
@@ -81,7 +85,7 @@ static php_stream *seaslog_stream_open_wrapper(char *opt TSRMLS_DC)
     return stream;
 }
 
-static void seaslog_init_stream_list(TSRMLS_D)
+void seaslog_init_stream_list(TSRMLS_D)
 {
     zval *z_stream_list;
 
@@ -97,34 +101,46 @@ static void seaslog_init_stream_list(TSRMLS_D)
 
 }
 
-static void seaslog_clear_stream_list(TSRMLS_D)
+int seaslog_clear_stream(int destroy, int model, char *opt TSRMLS_DC)
 {
     php_stream *stream = NULL;
     HashTable *ht;
+    stream_entry_t *stream_entry;
+    int result = FAILURE;
 
 #if PHP_VERSION_ID >= 70000
     zend_ulong num_key;
-    zend_string *str_key;
-    zval *stream_zval_get_php7;
 #else
-    zval **stream_zval_get;
+    ulong num_key;
 #endif
 
 #if PHP_VERSION_ID >= 70000
     if (IS_ARRAY == Z_TYPE(SEASLOG_G(stream_list)))
     {
         ht = Z_ARRVAL(SEASLOG_G(stream_list));
-        ZEND_HASH_FOREACH_KEY_VAL(ht, num_key, str_key, stream_zval_get_php7)
+        ZEND_HASH_FOREACH_NUM_KEY_PTR(ht, num_key, stream_entry)
         {
-            php_stream_from_zval_no_verify(stream,stream_zval_get_php7);
-            if (stream)
+            if (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL == model
+                || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
+            )
             {
-                php_stream_close(stream);
+                stream = stream_entry->stream;
+                if (stream)
+                {
+                    php_stream_close(stream);
+                    zend_hash_index_del(ht, num_key);
+                }
+                efree(stream_entry->opt);
+                efree(stream_entry);
+                result = SUCCESS;
             }
         }
         ZEND_HASH_FOREACH_END();
 
-        EX_ARRAY_DESTROY(&SEASLOG_G(stream_list));
+        if (SEASLOG_STREAM_LIST_DESTROY_YES == destroy)
+        {
+            EX_ARRAY_DESTROY(&SEASLOG_G(stream_list));
+        }
     }
 #else
     if (SEASLOG_G(stream_list) && IS_ARRAY == Z_TYPE_P(SEASLOG_G(stream_list)))
@@ -132,35 +148,50 @@ static void seaslog_clear_stream_list(TSRMLS_D)
         ht = HASH_OF(SEASLOG_G(stream_list));
 
         zend_hash_internal_pointer_reset(ht);
-        while (zend_hash_get_current_data(ht, (void **)&stream_zval_get) == SUCCESS)
+        while (zend_hash_get_current_data(ht, (void **)&stream_entry) == SUCCESS)
         {
-            php_stream_from_zval_no_verify(stream,stream_zval_get);
-            if (stream)
+            if (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL == model
+                || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
+            )
             {
-                php_stream_close(stream);
+                zend_hash_get_current_key_ex(ht, NULL, NULL, &num_key, 1, NULL);
+                stream = stream_entry->stream;
+                if (stream && stream_entry->can_delete == SEASLOG_CLOSE_LOGGER_STREAM_CAN_DELETE)
+                {
+                    php_stream_close(stream);
+                    efree(stream_entry->opt);
+                    zend_hash_index_del(ht, num_key);
+                }
+                else
+                {
+                    zend_hash_move_forward(ht);
+                }
+
+                result = SUCCESS;
             }
-            zend_hash_move_forward(ht);
+            else
+            {
+                zend_hash_move_forward(ht);
+            }
         }
 
-        EX_ARRAY_DESTROY(&(SEASLOG_G(stream_list)));
+        if (SEASLOG_STREAM_LIST_DESTROY_YES == destroy)
+        {
+            EX_ARRAY_DESTROY(&(SEASLOG_G(stream_list)));
+        }
     }
 #endif
 
+    return result;
 }
 
-static php_stream *process_stream(char *opt, int opt_len TSRMLS_DC)
+php_stream *process_stream(char *opt, int opt_len TSRMLS_DC)
 {
     ulong stream_entry_hash;
     php_stream *stream = NULL;
-    zval **stream_zval_get;
     HashTable *ht_list;
     php_stream_statbuf dest_s;
-#if PHP_VERSION_ID >= 70000
-    zval *stream_zval;
-    zval stream_zval_to;
-#else
-    zval *stream_zval_to;
-#endif
+    stream_entry_t *stream_entry;
 
     switch SEASLOG_G(appender)
     {
@@ -178,11 +209,10 @@ static php_stream *process_stream(char *opt, int opt_len TSRMLS_DC)
 #if PHP_VERSION_ID >= 70000
     ht_list = Z_ARRVAL(SEASLOG_G(stream_list));
 
-    if ((stream_zval = zend_hash_index_find(ht_list, stream_entry_hash)) != NULL)
+    if ((stream_entry = zend_hash_index_find_ptr(ht_list, stream_entry_hash)) != NULL)
     {
-        php_stream_from_zval_no_verify(stream,stream_zval);
-
-        if (stream)
+        stream = stream_entry->stream;
+        if (stream && stream_entry->can_delete == SEASLOG_CLOSE_LOGGER_STREAM_CAN_DELETE)
         {
             switch SEASLOG_G(appender)
             {
@@ -200,17 +230,18 @@ static php_stream *process_stream(char *opt, int opt_len TSRMLS_DC)
                     goto create_stream;
                 }
             }
+
+            return stream;
         }
 
-        return stream;
+        return NULL;
 #else
     ht_list = HASH_OF(SEASLOG_G(stream_list));
 
-    if (zend_hash_index_find(ht_list, stream_entry_hash, (void **)&stream_zval_get) == SUCCESS)
+    if (zend_hash_index_find(ht_list, stream_entry_hash, (void **)&stream_entry) == SUCCESS)
     {
-        php_stream_from_zval_no_verify(stream,stream_zval_get);
-
-        if (stream)
+        stream = stream_entry->stream;
+        if (stream && stream_entry->can_delete == SEASLOG_CLOSE_LOGGER_STREAM_CAN_DELETE)
         {
             switch SEASLOG_G(appender)
             {
@@ -228,9 +259,11 @@ static php_stream *process_stream(char *opt, int opt_len TSRMLS_DC)
                     goto create_stream;
                 }
             }
+
+            return stream;
         }
 
-        return stream;
+        return NULL;
 #endif
     }
     else
@@ -245,12 +278,17 @@ create_stream:
         {
 
 #if PHP_VERSION_ID >= 70000
-            php_stream_to_zval(stream, &stream_zval_to);
+            stream_entry = ecalloc(1,sizeof(stream_entry_t));
 #else
-            MAKE_STD_ZVAL(stream_zval_to);
-            php_stream_to_zval(stream, stream_zval_to);
+            stream_entry = pecalloc(1,sizeof(stream_entry_t),1);
 #endif
-            SEASLOG_ADD_INDEX_ZVAL(SEASLOG_G(stream_list),stream_entry_hash,stream_zval_to);
+
+            stream_entry->opt_len = spprintf(&stream_entry->opt, 0, "%s",opt);
+            stream_entry->stream_entry_hash = stream_entry_hash;
+            stream_entry->stream = stream;
+            stream_entry->can_delete = SEASLOG_CLOSE_LOGGER_STREAM_CAN_DELETE;
+
+            SEASLOG_ZEND_HASH_INDEX_ADD(ht_list, stream_entry_hash, stream_entry, sizeof(stream_entry_t));
 
             return stream;
         }
@@ -258,3 +296,4 @@ create_stream:
 
     return stream;
 }
+

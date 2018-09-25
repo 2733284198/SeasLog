@@ -28,12 +28,15 @@
 # define SEASLOG_ADD_ASSOC_STRING_EX(a, k, l, s) add_assoc_string_ex(&a, k, l, s)
 # define SEASLOG_ADD_NEXT_INDEX_STRING(a, s) add_next_index_string(a, s)
 # define SEASLOG_ADD_NEXT_INDEX_STRINGL(a, s, l) add_next_index_stringl(a, s, l)
+# define SEASLOG_ZEND_HASH_INDEX_ADD(ht, h, pData, nDataSize) zend_hash_index_add_ptr(ht, h, pData)
 # define SEASLOG_ZEND_HASH_GET_CURRENT_KEY(ht, key, idx) zend_hash_get_current_key(ht, key, idx)
 # define SEASLOG_ZEND_HASH_INDEX_UPDATE(ht, h, pData, nDataSize, pDest)  zend_hash_index_update_ptr(ht, h, pData)
 # define SEASLOG_SMART_STR_C(str) ZSTR_VAL(str.s)
 # define SEASLOG_SMART_STR_L(str) ZSTR_LEN(str.s)
 # define SEASLOG_AUTO_GLOBAL(n) zend_is_auto_global_str(ZEND_STRL(n) TSRMLS_CC)
 # define SEASLOG_ZVAL_PTR_DTOR(z) zval_ptr_dtor(z)
+
+# define SEASLOG_EXPAND_FILE_PATH(dir, buf) expand_filepath_with_mode(dir, buf, NULL, 0, CWD_EXPAND)
 
 #else
 
@@ -48,6 +51,7 @@
 # define SEASLOG_ADD_ASSOC_STRING_EX(a, k, l, s) add_assoc_string_ex(a, k, l, s, 1)
 # define SEASLOG_ADD_NEXT_INDEX_STRING(a, s) add_next_index_string(a, s, 1)
 # define SEASLOG_ADD_NEXT_INDEX_STRINGL(a, s, l) add_next_index_stringl(a, s, l, 1)
+# define SEASLOG_ZEND_HASH_INDEX_ADD(ht, h, pData, nDataSize) zend_hash_index_update(ht, h, pData, nDataSize, NULL)
 # define SEASLOG_ZEND_HASH_GET_CURRENT_KEY(ht, key, idx) zend_hash_get_current_key(ht, key, idx, 0)
 # define SEASLOG_ZEND_HASH_INDEX_UPDATE(ht, h, pData, nDataSize, pDest)  zend_hash_index_update(ht, h, pData, nDataSize, pDest)
 # define SEASLOG_SMART_STR_C(str) str.c
@@ -55,4 +59,11 @@
 # define SEASLOG_AUTO_GLOBAL(n) zend_is_auto_global(n, sizeof(n)-1 TSRMLS_CC)
 # define SEASLOG_ZVAL_PTR_DTOR(z) zval_ptr_dtor(&z)
 
+# if PHP_API_VERSION >= 20100412
+# define SEASLOG_EXPAND_FILE_PATH(dir, buf) expand_filepath_with_mode(dir, buf, NULL, 0, CWD_EXPAND TSRMLS_CC)
+# else
+# define SEASLOG_EXPAND_FILE_PATH(dir, buf) expand_filepath_ex(dir, buf, NULL, 0 TSRMLS_CC)
+# endif
+
 #endif
+

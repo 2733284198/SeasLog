@@ -14,8 +14,9 @@
   +----------------------------------------------------------------------+
 */
 
+#include "Performance.h"
 
-static void seaslog_memory_usage(smart_str *buf TSRMLS_DC)
+void seaslog_memory_usage(smart_str *buf TSRMLS_DC)
 {
     long int usage = zend_memory_usage(0 TSRMLS_CC);
     smart_str_append_long(buf, usage);
@@ -23,10 +24,11 @@ static void seaslog_memory_usage(smart_str *buf TSRMLS_DC)
     smart_str_0(buf);
 }
 
-static void seaslog_peak_memory_usage(smart_str *buf TSRMLS_DC)
+void seaslog_peak_memory_usage(smart_str *buf TSRMLS_DC)
 {
     long int usage = zend_memory_peak_usage(0 TSRMLS_CC);
     smart_str_append_long(buf, usage);
 
     smart_str_0(buf);
 }
+

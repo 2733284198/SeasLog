@@ -14,11 +14,16 @@
   +----------------------------------------------------------------------+
 */
 
-static long get_type_count(char *log_path, char *level, char *key_word TSRMLS_DC)
+#include "Analyzer.h"
+#include "Common.h"
+#include "ExceptionHook.h"
+#include "TemplateFormatter.h"
+
+long get_type_count(char *log_path, char *level, char *key_word TSRMLS_DC)
 {
     FILE * fp;
     char buffer[BUFSIZ];
-    char *path, *sh;
+    char *path, *sh, *level_template = NULL;
     long count;
     int is_level_all = 0;
 
@@ -27,13 +32,19 @@ static long get_type_count(char *log_path, char *level, char *key_word TSRMLS_DC
         return (long)0;
     }
 
+    if (!strcmp(level, SEASLOG_ALL))
+    {
+        is_level_all = 1;
+    }
+    else
+    {
+        seaslog_spprintf(&level_template TSRMLS_CC, SEASLOG_GENERATE_LEVEL_TEMPLATE, level, 0);
+        level = level_template;
+    }
+
+
     if (SEASLOG_G(disting_type))
     {
-        if (!strcmp(level, SEASLOG_ALL))
-        {
-            is_level_all = 1;
-        }
-
         if (is_level_all == 1)
         {
             spprintf(&path, 0, "%s%s%s*.*", SEASLOG_G(last_logger)->logger_path, SEASLOG_G(slash_or_underline), log_path);
@@ -99,11 +110,15 @@ static long get_type_count(char *log_path, char *level, char *key_word TSRMLS_DC
     count = atoi(delN(buffer));
     efree(path);
     efree(sh);
+    if (level_template)
+    {
+        efree(level_template);
+    }
 
     return count;
 }
 
-static int get_detail(char *log_path, char *level, char *key_word, long start, long end, long order, zval *return_value TSRMLS_DC)
+int get_detail(char *log_path, char *level, char *key_word, long start, long end, long order, zval *return_value TSRMLS_DC)
 {
     FILE * fp;
     char buffer[SEASLOG_BUFFER_MAX_SIZE];
@@ -220,3 +235,4 @@ static int get_detail(char *log_path, char *level, char *key_word, long start, l
 
     return SUCCESS;
 }
+

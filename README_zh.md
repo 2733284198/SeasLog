@@ -1,6 +1,7 @@
 SeasLog
 ======
 [![Build Status](https://travis-ci.org/SeasX/SeasLog.svg?branch=master)](https://travis-ci.org/SeasX/SeasLog)
+[![Build status](https://ci.appveyor.com/api/projects/status/xkf8y7msk7kskon2?svg=true)](https://ci.appveyor.com/project/Neeke/seaslog)
 
 An effective,fast,stable log extension for PHP
 
@@ -11,6 +12,8 @@ An effective,fast,stable log extension for PHP
 [English Document](https://github.com/SeasX/SeasLog/blob/master/README.md)
 
 [日志规范](https://github.com/SeasX/SeasLog/blob/master/Specification/README_zh.md)
+
+[日志收集](https://github.com/SeasX/SeasLog/blob/master/Specification/SeasLog_Rsyslog_ELK_zh.md)
 
 > ---
 - **[简介](#简介)**
@@ -31,7 +34,9 @@ An effective,fast,stable log extension for PHP
     - **[SeasLog Logger的使用](#seaslog-logger的使用)**
         - [获取与设置basePath](#获取与设置basepath)
         - [设置logger与获取lastLogger](#设置logger与获取lastlogger)
-        - [快速写入log](#快速写入log)
+        - [快速写入log](#速写入log)
+        - [使用TCP或UDP发送时的数据格式](#使用tcp或udp发送时的数据格式)
+        - [手动清除LoggerStream缓存](#手动清除loggerstream缓存)
     - **[SeasLog Analyzer的使用](#seaslog-analyzer的使用)**
         - [快速统计某类型log的count值](#快速统计某类型log的count值)
         - [获取某类型log列表](#获取某类型log列表)
@@ -134,6 +139,10 @@ seaslog.use_buffer = 0
 ;buffer中缓冲数量 默认0(不使用buffer_size)
 seaslog.buffer_size = 100
 
+;cli运行时关闭buffer
+;1是 0否(默认)
+seaslog.buffer_disabled_in_cli = 0
+
 ;记录日志级别，数字越大，根据级别记的日志越多。
 ;0-EMERGENCY 1-ALERT 2-CRITICAL 3-ERROR 4-WARNING 5-NOTICE 6-INFO 7-DEBUG 8-ALL
 ;默认8(所有日志)
@@ -148,6 +157,12 @@ seaslog.level = 8
 ;影响预定义变量 %F 中的行数
 ;默认0
 seaslog.recall_depth = 0
+
+;自动记录notice 默认0(关闭)
+seaslog.trace_notice = 0
+
+;自动记录warning 默认0(开启)
+seaslog.trace_warning = 0
 
 ;自动记录错误 默认1(开启)
 seaslog.trace_error = 1
@@ -168,6 +183,9 @@ seaslog.remote_host = "127.0.0.1"
 ;接收端口 默认514 (当使用TCP或UDP时必填)
 seaslog.remote_port = 514
 
+;接收端口的超时时间 默认1秒
+seaslog.remote_timeout = 1
+
 ;过滤日志中的回车和换行符 (默认为0)
 seaslog.trim_wrap = 0
 
@@ -186,6 +204,8 @@ seaslog.ignore_warning = 1
 > `seaslog.use_buffer = 1` 开启buffer。默认关闭。当开启此项时，日志预存于内存，当请求结束时(或异常退出时)一次写入文件。
 
 > `seaslog.buffer_size = 100` 设置缓冲数量为100. 默认为0,即无缓冲数量限制.当buffer_size大于0时,缓冲量达到该值则写一次文件.
+
+> `seaslog.buffer_disabled_in_cli = 1` 开启CLI运行时禁用缓存。默认关闭。当开启此项时，CLI运行时将忽略seaslog.use_buffer设定，日志写入文件。
 
 > `seaslog.level = 8` 记录的日志级别.默认为8,即所有日志均记录。
 
@@ -255,7 +275,7 @@ seaslog.ignore_warning = 1
 ##### SEASLOG_CRITICAL
 * "CRITICAL"    - 紧急情况、需要立刻进行修复、程序组件不可用
 ##### SEASLOG_ALERT
-* "ALERT"       - 必级立即采取行动的紧急事件、需要立即通知相关人员紧急修复
+* "ALERT"       - 必须立即采取行动的紧急事件、需要立即通知相关人员紧急修复
 ##### SEASLOG_EMERGENCY
 * "EMERGENCY"   - 系统不可用
 ```php
@@ -286,6 +306,8 @@ define('SEASLOG_ALERT', 'ALERT');
 define('SEASLOG_EMERGENCY', 'EMERGENCY');
 define('SEASLOG_DETAIL_ORDER_ASC', 1);
 define('SEASLOG_DETAIL_ORDER_DESC', 2);
+define('SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL', 1);
+define('SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN', 2);
 
 class SeasLog
 {
@@ -308,7 +330,7 @@ class SeasLog
      */
     static public function setBasePath($basePath)
     {
-        return TRUE;
+        return true;
     }
 
     /**
@@ -320,32 +342,51 @@ class SeasLog
     {
         return 'the base_path';
     }
-    
+
     /**
      * 设置本次请求标识
+     *
      * @param string
+     *
      * @return bool
      */
-    static public function setRequestID($request_id){
-        return TRUE;
+    static public function setRequestID($request_id)
+    {
+        return true;
     }
+
     /**
      * 获取本次请求标识
      * @return string
      */
-    static public function getRequestID(){
+    static public function getRequestID()
+    {
         return uniqid();
     }
 
     /**
      * 设置模块目录
+     *
      * @param $module
      *
      * @return bool
      */
     static public function setLogger($module)
     {
-        return TRUE;
+        return true;
+    }
+
+    /**
+     * 手动清除logger的stream流
+     *
+     * @param $model
+     * @param $logger
+     *
+     * @return bool
+     */
+    static public function closeLoggerStream($model, $logger)
+    {
+        return true;
     }
 
     /**
@@ -359,13 +400,14 @@ class SeasLog
 
     /**
      * 设置DatetimeFormat配置
+     *
      * @param $format
      *
      * @return bool
      */
     static public function setDatetimeFormat($format)
     {
-        return TRUE;
+        return true;
     }
 
     /**
@@ -379,13 +421,14 @@ class SeasLog
 
     /**
      * 统计所有类型（或单个类型）行数
+     *
      * @param string $level
      * @param string $log_path
      * @param null   $key_word
      *
      * @return array | long
      */
-    static public function analyzerCount($level = 'all', $log_path = '*', $key_word = NULL)
+    static public function analyzerCount($level = 'all', $log_path = '*', $key_word = null)
     {
         return array();
     }
@@ -398,11 +441,11 @@ class SeasLog
      * @param null   $key_word
      * @param int    $start
      * @param int    $limit
-     * @param        $order 默认为正序 SEASLOG_DETAIL_ORDER_ASC，可选倒序 SEASLOG_DETAIL_ORDER_DESC
+     * @param        $order
      *
      * @return array
      */
-    static public function analyzerDetail($level = SEASLOG_INFO, $log_path = '*', $key_word = NULL, $start = 1, $limit = 20, $order = SEASLOG_DETAIL_ORDER_ASC)
+    static public function analyzerDetail($level = SEASLOG_INFO, $log_path = '*', $key_word = null, $start = 1, $limit = 20, $order = SEASLOG_DETAIL_ORDER_ASC)
     {
         return array();
     }
@@ -424,7 +467,7 @@ class SeasLog
      */
     static public function flushBuffer()
     {
-        return TRUE;
+        return true;
     }
 
     /**
@@ -525,6 +568,7 @@ class SeasLog
 
     /**
      * 通用日志方法
+     *
      * @param        $level
      * @param        $message
      * @param array  $content
@@ -541,285 +585,8 @@ class SeasLog
 ```
 
 ### PHP Re 结果
+[SeasLog_PHP_Re_Result](https://github.com/SeasX/SeasLog/blob/master/Specification/SeasLog_PHP_Re_Result.md)
 
-```php
-/usr/local/php/php-7.0.6-zts-debug/bin/php --re seaslog
-
-Extension [ <persistent> extension #29 SeasLog version 1.8.4 ] {
-
-  - Dependencies {
-  }
-
-  - INI {
-    Entry [ seaslog.default_basepath <ALL> ]
-      Current = '/var/log/www'
-    }
-    Entry [ seaslog.default_logger <ALL> ]
-      Current = 'default'
-    }
-    Entry [ seaslog.default_datetime_format <ALL> ]
-      Current = 'Y-m-d H:i:s'
-    }
-    Entry [ seaslog.default_template <ALL> ]
-      Current = '%T | %L | %P | %Q | %t | %M'
-    }
-    Entry [ seaslog.disting_folder <ALL> ]
-      Current = '1'
-    }
-    Entry [ seaslog.disting_type <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.disting_by_hour <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.use_buffer <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.trace_notice <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.trace_warning <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.trace_error <ALL> ]
-      Current = '1'
-    }
-    Entry [ seaslog.trace_exception <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.buffer_size <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.level <ALL> ]
-      Current = '8'
-    }
-    Entry [ seaslog.recall_depth <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.appender <ALL> ]
-      Current = '1'
-    }
-    Entry [ seaslog.appender_retry <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.remote_host <ALL> ]
-      Current = '127.0.0.1'
-    }
-    Entry [ seaslog.remote_port <ALL> ]
-      Current = '514'
-    }
-    Entry [ seaslog.trim_wrap <ALL> ]
-      Current = '0'
-    }
-    Entry [ seaslog.throw_exception <ALL> ]
-      Current = '1'
-    }
-    Entry [ seaslog.ignore_warning <ALL> ]
-      Current = '1'
-    }
-  }
-
-  - Constants [16] {
-    Constant [ string SEASLOG_VERSION ] { 1.8.4 }
-    Constant [ string SEASLOG_AUTHOR ] { Chitao.Gao  [ neeke@php.net ] }
-    Constant [ string SEASLOG_ALL ] { ALL }
-    Constant [ string SEASLOG_DEBUG ] { DEBUG }
-    Constant [ string SEASLOG_INFO ] { INFO }
-    Constant [ string SEASLOG_NOTICE ] { NOTICE }
-    Constant [ string SEASLOG_WARNING ] { WARNING }
-    Constant [ string SEASLOG_ERROR ] { ERROR }
-    Constant [ string SEASLOG_CRITICAL ] { CRITICAL }
-    Constant [ string SEASLOG_ALERT ] { ALERT }
-    Constant [ string SEASLOG_EMERGENCY ] { EMERGENCY }
-    Constant [ integer SEASLOG_DETAIL_ORDER_ASC ] { 1 }
-    Constant [ integer SEASLOG_DETAIL_ORDER_DESC ] { 2 }
-    Constant [ integer SEASLOG_APPENDER_FILE ] { 1 }
-    Constant [ integer SEASLOG_APPENDER_TCP ] { 2 }
-    Constant [ integer SEASLOG_APPENDER_UDP ] { 3 }
-  }
-
-  - Functions {
-    Function [ <internal:SeasLog> function seaslog_get_version ] {
-    }
-    Function [ <internal:SeasLog> function seaslog_get_author ] {
-    }
-  }
-
-  - Classes [1] {
-    Class [ <internal:SeasLog> class SeasLog ] {
-
-      - Constants [0] {
-      }
-
-      - Static properties [0] {
-      }
-
-      - Static methods [21] {
-        Method [ <internal:SeasLog> static public method setBasePath ] {
-
-          - Parameters [1] {
-            Parameter #0 [ <required> $base_path ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method getBasePath ] {
-        }
-
-        Method [ <internal:SeasLog> static public method setLogger ] {
-
-          - Parameters [1] {
-            Parameter #0 [ <required> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method getLastLogger ] {
-        }
-
-        Method [ <internal:SeasLog> static public method setRequestID ] {
-
-          - Parameters [1] {
-            Parameter #0 [ <required> $request_id ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method getRequestID ] {
-        }
-
-        Method [ <internal:SeasLog> static public method setDatetimeFormat ] {
-
-          - Parameters [1] {
-            Parameter #0 [ <required> $format ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method getDatetimeFormat ] {
-        }
-
-        Method [ <internal:SeasLog> static public method analyzerCount ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $level ]
-            Parameter #1 [ <optional> $log_path ]
-            Parameter #2 [ <optional> $key_word ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method analyzerDetail ] {
-
-          - Parameters [6] {
-            Parameter #0 [ <required> $level ]
-            Parameter #1 [ <optional> $log_path ]
-            Parameter #2 [ <optional> $key_word ]
-            Parameter #3 [ <optional> $start ]
-            Parameter #4 [ <optional> $limit ]
-            Parameter #5 [ <optional> $order ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method getBuffer ] {
-        }
-
-        Method [ <internal:SeasLog> static public method flushBuffer ] {
-        }
-
-        Method [ <internal:SeasLog> static public method log ] {
-
-          - Parameters [4] {
-            Parameter #0 [ <required> $level ]
-            Parameter #1 [ <optional> $message ]
-            Parameter #2 [ <optional> $content ]
-            Parameter #3 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method debug ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method info ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method notice ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method warning ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method error ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method critical ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method alert ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-
-        Method [ <internal:SeasLog> static public method emergency ] {
-
-          - Parameters [3] {
-            Parameter #0 [ <required> $message ]
-            Parameter #1 [ <optional> $content ]
-            Parameter #2 [ <optional> $logger ]
-          }
-        }
-      }
-
-      - Properties [0] {
-      }
-
-      - Methods [2] {
-        Method [ <internal:SeasLog, ctor> public method __construct ] {
-        }
-
-        Method [ <internal:SeasLog, dtor> public method __destruct ] {
-        }
-      }
-    }
-  }
-}
-
-```
 
 
 ### SeasLog Logger的使用
@@ -920,7 +687,8 @@ SeasLog::error('test error 3');
 2014-07-27 08:53:52 | EMERGENCY | 23625 | 599159975a9ff | 1406422432.787 | Just now, the house next door was completely burnt out! it is a joke
 ```
 
-#### 当`seaslog.appender`配置为 `2（TCP）` 或 `3（UDP）` 时，日志将推送至remote_host:remote_port的TCP或UDP端口
+#### 使用TCP或UDP发送时的数据格式
+当`seaslog.appender`配置为 `2（TCP）` 或 `3（UDP）` 时，日志将推送至remote_host:remote_port的TCP或UDP端口
 > SeasLog发送至远端时，遵循规范[RFC5424](http://www.faqs.org/rfcs/rfc5424.html)
 > log格式统一为：`<PRI>1 {timeStampWithRFC3339} {HostName} {loggerName}[{pid}]: {logInfo}`
 > 上述`{logInfo}` 受配置  `seaslog.default_template`影响。
@@ -930,6 +698,24 @@ SeasLog::error('test error 3');
 <15>1 2017-08-27T01:24:59+08:00 vagrant-ubuntu-trusty test/logger[27171]: 2016-06-25 00:59:43 | DEBUG | 21423 | 599157af4e937 | 1466787583.322 | this is a neeke debug
 <14>1 2017-08-27T01:24:59+08:00 vagrant-ubuntu-trusty test/logger[27171]: 2016-06-25 00:59:43 | INFO | 21423 | 599157af4e937 | 1466787583.323 | this is a info log
 <13>1 2017-08-27T01:24:59+08:00 vagrant-ubuntu-trusty test/logger[27171]: 2016-06-25 00:59:43 | NOTICE | 21423 | 599157af4e937 | 1466787583.324 | this is a notice log
+```
+
+#### 手动清除LoggerStream缓存
+`SeasLog`会将日志Logger开启的Stream句柄进行缓存，以节省创建流时引起的开销。句柄将在请求结束时自动释放。
+如果在CLI模式下，进程退出时也会自动释放。或者你可以使用下面的函数进行手动释放(手动释放函数需要更新SeasLog 1.8.6或更新版本)。
+> 手动关闭所有的Logger Stream句柄：
+```php
+SeasLog::closeLoggerStream();
+
+或
+
+SeasLog::closeLoggerStream(SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL);
+
+```
+
+> 手动关闭指定的Logger Stream句柄：
+```php
+SeasLog::closeLoggerStream(SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN, 'logger_name');
 ```
 
 ### SeasLog Analyzer的使用
@@ -1025,6 +811,13 @@ fork_count = 3
 [warning]
 email[smtp_host] = smtp.163.com
 email[smtp_port] = 25
+; 是否开启加密协议 tsl ssl, 留空为不开启
+email[smtp_secure] =
+; 邮件发送类型 smtp, sendmail, mail
+; smtp: PHP实现的smtp协议
+; sendmail: 需配置php.ini中sendmail_path
+; mail: 使用PHP内置mail()函数
+email[smtp_mailer] = smtp
 email[subject_pre] = 预警邮件 -
 email[smtp_user] = seaslogdemo@163.com
 email[smtp_pwd] = seaslog#demo
@@ -1044,13 +837,18 @@ email[mail_bcc] =
 ; SEASLOG_ALERT      "ALERT"
 ; SEASLOG_EMERGENCY  "EMERGENCY"
 
-test1[module] = test/bb
+; 可以实现分别监控不同模块下特定级别的日志发送给不同的邮箱
+; test1 监控任务表示
+; 统计test模块SEASLOG_ERROR等级的日志数量，如果数量大于3则发送报警邮件到gaochitao@weiboyi.com
+
+test1[module] = test
 test1[level] = SEASLOG_ERROR
-test1[bar] = 1
+test1[bar] = 3
 test1[mail_to] = gaochitao@weiboyi.com
 
 test2[module] = 222
 test2[level] = SEASLOG_WARNING
+test2[mail_to] = gaochitao@weiboyi.com,seaslog@weiboyi.com
 
 test3[module] = 333
 test3[level] = SEASLOG_CRITICAL
@@ -1081,3 +879,4 @@ test5[level] = SEASLOG_DEBUG
  - 爱宠医生(中国最大的互联网宠物医疗平台) www.5ichong.com
  - 爱奇艺秀场(美女直播平台) x.pps.tv
  - 更多..
+

@@ -93,7 +93,7 @@ debug信息、细粒度信息事件
 
 <font color=green>［推荐］</font>ALERT
 
-必级立即采取行动的紧急事件、需要立即通知相关人员紧急修复
+必须立即采取行动的紧急事件、需要立即通知相关人员紧急修复
 
 如：整个网站垮掉、DB/Cache无法连接
 
@@ -170,3 +170,4 @@ debug信息、细粒度信息事件
 <font color=green>［正例］</font>2017-09-13 19:35:54 | ERROR | 26922 | api error /api/getuserinfo 404
 
 <font color=green>［正例］</font>2017-09-13 19:35:54 ERROR 26922 api error /api/getuserinfo 404
+

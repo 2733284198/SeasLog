@@ -11,7 +11,7 @@ use constant\mailTpl;
 class analyzerBase
 {
 
-    static public function analyzerRun($configKey = NULL, $config = array())
+    static public function analyzerRun($configKey = null, $config = array())
     {
         if (empty($configKey) || !is_array($config) || count($config) < 1) {
             throw new \Exception('$configKey can`t be empty || $config must be an array.');
@@ -19,8 +19,10 @@ class analyzerBase
 
         \SeasLog::setLogger($config['module']);
 
-        $logLevel = intval($config['level']);
-        if (empty($logLevel)) $logLevel = SEASLOG_ERROR;
+        $logLevel = $config['level'];
+        if (empty($logLevel)) {
+            $logLevel = SEASLOG_ERROR;
+        }
 
         $_analyzer_count = \SeasLog::analyzerCount($logLevel);
 
@@ -42,3 +44,4 @@ class analyzerBase
         }
     }
 }
+

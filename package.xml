@@ -23,11 +23,11 @@
         <email>neeke@php.net</email>
         <active>yes</active>
     </lead>
-    <date>2018-03-23</date>
-    <time>18:30:00</time>
+    <date>2018-09-07</date>
+    <time>17:45:00</time>
     <version>
-        <release>1.8.4</release>
-        <api>1.8.4</api>
+        <release>1.8.6</release>
+        <api>1.8.6</api>
     </version>
     <stability>
         <release>stable</release>
@@ -35,18 +35,20 @@
     </stability>
     <license uri="http://www.php.net/license/3_01.txt">PHP3.01</license>
     <notes>
-        - New Feature #162 Configure seaslog.recall_depth support for filename and code line.
-        - New Feature #170 Configure seaslog.trace_notice and seaslog.trace_warning support trace notice and warning.
-        - New Feature #172 Configure seaslog.disting_folder support switch {Logger}/{Time}[.Type].log or {Logger}_{Time}[.Type].log.
-        - New Feature #174 Add %U(MemoryUsage) and %u(PeakMemoryUsage) into default variable table.
-        - New Feature #186 Use seaslog_throw_exception replace zend_error.
-        - Fixed issue #65 Message template content match error.
-        - Fixed issue #153 Disting_by_hour and disting_type can not use together.
-        - Fixed issue #156 Log template format error with %L and %M.
-        - Fixed issue #158 SeasLog::setRequestID intercepted error.
-        - Fixed issue #165 Phpdbg seg fault.
-        - Fixed issue #184 SeasLog::analyzerCount seg fault at PHP7-nts.
-        - Fixed issue #181 Perfect when stream's connection was broken.
+        - New Feature Add log message collection recommendations docs.
+        - New Feature Add bench_mark.php
+        - New Feature #218 add SeasLog::closeLoggerStream()
+        - Fixed check_log_level:log level should lower than setting 'seaslog.level'
+        - Fixed core dump in phpdbg.
+        - Fixed smtp_secure and smtp_mailer.
+        - Fixed issue #125 #203 Add seaslog.buffer_disabled_in_cli to config, default false.
+        - Fixed issue #196 php5.3.x undefined symbol: expand_filepath_with_mode.
+        - Fixed issue #195 rsyslog recive log with RFC5424.
+        - Fixed issue #200 error warning when tcp/udp error.
+        - Fixed issue #202 Add unit tests.
+        - Fixed issue #210 add seaslog.remote_timeout to config, default 1 second.
+        - Fixed issue #215 analyzerCount error.
+        - Fixed issue #228 analyzerDetail error.
     </notes>
     <contents>
         <dir name="/">
@@ -62,6 +64,18 @@
             <dir name="include">
                 <file role="src" name="SeasLog.h" />
                 <file role="src" name="php7_wrapper.h" />
+                <file role="src" name="Analyzer.h" />
+                <file role="src" name="Appender.h" />
+                <file role="src" name="Buffer.h" />
+                <file role="src" name="Common.h" />
+                <file role="src" name="Datetime.h" />
+                <file role="src" name="ErrorHook.h" />
+                <file role="src" name="ExceptionHook.h" />
+                <file role="src" name="Logger.h" />
+                <file role="src" name="Performance.h" />
+                <file role="src" name="Request.h" />
+                <file role="src" name="StreamWrapper.h" />
+                <file role="src" name="TemplateFormatter.h" />
             </dir>
             <dir name="src">
                 <file role="src" name="Common.c" />
@@ -80,8 +94,26 @@
             <dir name="CodeTips">
                 <file role="src" name="SeasLogCodeTips.php"/>
             </dir>
+            <dir name="Specification">
+                <file role="src" name="README_zh.md"/>
+                <file role="src" name="SeasLog_PHP_Re_Result.md"/>
+                <file role="src" name="SeasLog_Rsyslog_ELK_zh.md"/>
+            </dir>
             <dir name="tests">
                 <file role="src" name="001.phpt" />
+                <file role="src" name="002.phpt" />
+                <file role="src" name="003.phpt" />
+                <file role="src" name="004.phpt" />
+                <file role="src" name="005.phpt" />
+                <file role="src" name="006.phpt" />
+                <file role="src" name="007.phpt" />
+                <file role="src" name="008.phpt" />
+                <file role="src" name="009.phpt" />
+                <file role="src" name="010.phpt" />
+                <file role="src" name="011.phpt" />
+                <file role="src" name="012.phpt" />
+                <file role="src" name="013.phpt" />
+                <file role="src" name="014.phpt" />
                 <file role="src" name="seaslog.test.php" />
                 <file role="src" name="SeasLogVSlog4php.png" />
             </dir>
@@ -538,5 +570,33 @@
                 - Fixed issue #152. Segfault in cli.
             </notes>
         </release>
+        <release>
+            <date>2018-03-23</date>
+            <time>18:30:00</time>
+            <version>
+                <release>1.8.4</release>
+                <api>1.8.4</api>
+            </version>
+            <stability>
+                <release>stable</release>
+                <api>stable</api>
+            </stability>
+            <license uri="http://www.php.net/license/3_01.txt">PHP3.01</license>
+            <notes>
+                - New Feature #162 Configure seaslog.recall_depth support for filename and code line.
+                - New Feature #170 Configure seaslog.trace_notice and seaslog.trace_warning support trace notice and warning.
+                - New Feature #172 Configure seaslog.disting_folder support switch {Logger}/{Time}[.Type].log or {Logger}_{Time}[.Type].log.
+                - New Feature #174 Add %U(MemoryUsage) and %u(PeakMemoryUsage) into default variable table.
+                - New Feature #186 Use seaslog_throw_exception replace zend_error.
+                - Fixed issue #65 Message template content match error.
+                - Fixed issue #153 Disting_by_hour and disting_type can not use together.
+                - Fixed issue #156 Log template format error with %L and %M.
+                - Fixed issue #158 SeasLog::setRequestID intercepted error.
+                - Fixed issue #165 Phpdbg seg fault.
+                - Fixed issue #184 SeasLog::analyzerCount seg fault at PHP7-nts.
+                - Fixed issue #181 Perfect when stream's connection was broken.
+            </notes>
+        </release>
     </changelog>
 </package>
+

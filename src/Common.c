@@ -14,7 +14,19 @@
   +----------------------------------------------------------------------+
 */
 
-static int seaslog_get_level_int(char *level)
+#include "Common.h"
+
+int check_sapi_is_cli(TSRMLS_D)
+{
+    if (!strncmp(sapi_module.name , SEASLOG_CLI_KEY, sizeof(SEASLOG_CLI_KEY) - 1))
+    {
+        return SUCCESS;
+    }
+
+    return FAILURE;
+}
+
+int seaslog_get_level_int(char *level)
 {
     if (strcmp(level, SEASLOG_DEBUG) == 0)
     {
@@ -52,45 +64,16 @@ static int seaslog_get_level_int(char *level)
     return SEASLOG_DEBUG_INT;
 }
 
-static int check_log_level(int level TSRMLS_DC)
+int check_log_level(int level TSRMLS_DC)
 {
-    if (SEASLOG_G(level) >= SEASLOG_DEBUG_INT) return SUCCESS;
-    if (SEASLOG_G(level) < SEASLOG_EMERGENCY_INT) return FAILURE;
-
-    switch (level)
-    {
-    case SEASLOG_DEBUG_INT:
-        if (SEASLOG_G(level) >= SEASLOG_DEBUG_INT) return SUCCESS;
-        break;
-    case SEASLOG_INFO_INT:
-        if (SEASLOG_G(level) >= SEASLOG_INFO_INT) return SUCCESS;
-        break;
-    case SEASLOG_NOTICE_INT:
-        if (SEASLOG_G(level) >= SEASLOG_NOTICE_INT) return SUCCESS;
-        break;
-    case SEASLOG_WARNING_INT:
-        if (SEASLOG_G(level) >= SEASLOG_WARNING_INT) return SUCCESS;
-        break;
-    case SEASLOG_ERROR_INT:
-        if (SEASLOG_G(level) >= SEASLOG_ERROR_INT) return SUCCESS;
-        break;
-    case SEASLOG_CRITICAL_INT:
-        if (SEASLOG_G(level) >= SEASLOG_CRITICAL_INT) return SUCCESS;
-        break;
-    case SEASLOG_ALERT_INT:
-        if (SEASLOG_G(level) >= SEASLOG_ALERT_INT) return SUCCESS;
-        break;
-    case SEASLOG_EMERGENCY_INT:
-        if (SEASLOG_G(level) >= SEASLOG_EMERGENCY_INT) return SUCCESS;
-        break;
-    default:
+    if (level < SEASLOG_EMERGENCY_INT || level > SEASLOG_G(level)) {
         return FAILURE;
     }
 
-    return FAILURE;
+    return SUCCESS;
 }
 
-static char *str_replace(char *src, const char *from, const char *to)
+char *str_replace(char *src, const char *from, const char *to)
 {
     char *needle;
     char *tmp;
@@ -142,7 +125,7 @@ static char *str_appender(char *str, int str_len)
 }
 
 #if PHP_VERSION_ID >= 70000
-static char *php_strtr_array(char *str, int slen, HashTable *pats)
+char* php_strtr_array(char *str, int slen, HashTable *hash)
 {
     zend_ulong num_key;
     zend_string *str_key;
@@ -150,7 +133,7 @@ static char *php_strtr_array(char *str, int slen, HashTable *pats)
     zval *entry;
     char *tmp = estrdup(str);
 
-    ZEND_HASH_FOREACH_KEY_VAL(pats, num_key, str_key, entry)
+    ZEND_HASH_FOREACH_KEY_VAL(hash, num_key, str_key, entry)
     {
         if (UNEXPECTED(!str_key))
         {
@@ -193,9 +176,8 @@ static char *php_strtr_array(char *str, int slen, HashTable *pats)
 
     return tmp;
 }
-
 #else
-static char *php_strtr_array(char *str, int slen, HashTable *hash)
+char* php_strtr_array(char *str, int slen, HashTable *hash)
 {
     zval **entry;
     char  *string_key, *string_key_tmp = NULL;
@@ -260,7 +242,7 @@ static char *php_strtr_array(char *str, int slen, HashTable *hash)
 }
 #endif
 
-static int message_trim_wrap(char *message,int message_len TSRMLS_DC)
+int message_trim_wrap(char *message,int message_len TSRMLS_DC)
 {
     int i;
     for (i=0; i<=message_len; i++)
@@ -274,7 +256,7 @@ static int message_trim_wrap(char *message,int message_len TSRMLS_DC)
     return SUCCESS;
 }
 
-static char *delN(char *a)
+char *delN(char *a)
 {
     int l;
     l = strlen(a);
@@ -283,7 +265,7 @@ static char *delN(char *a)
     return a;
 }
 
-static char *get_uniqid()
+char *get_uniqid()
 {
     char *uniqid;
     struct timeval tv;
@@ -295,13 +277,3 @@ static char *get_uniqid()
     return uniqid;
 }
 
-static void initRStart(TSRMLS_D)
-{
-    SEASLOG_G(initRComplete) = SEASLOG_INITR_COMPLETE_NO;
-    SEASLOG_G(error_loop) = 0;
-}
-
-static void initREnd(TSRMLS_D)
-{
-    SEASLOG_G(initRComplete) = SEASLOG_INITR_COMPLETE_YES;
-}
