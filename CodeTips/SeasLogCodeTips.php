@@ -17,6 +17,10 @@ define('SEASLOG_DETAIL_ORDER_ASC', 1);
 define('SEASLOG_DETAIL_ORDER_DESC', 2);
 define('SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL', 1);
 define('SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN', 2);
+define('SEASLOG_REQUEST_VARIABLE_DOMAIN_PORT', 1);
+define('SEASLOG_REQUEST_VARIABLE_REQUEST_URI', 2);
+define('SEASLOG_REQUEST_VARIABLE_REQUEST_METHOD', 3);
+define('SEASLOG_REQUEST_VARIABLE_CLIENT_IP', 4);
 
 class SeasLog
 {
@@ -76,11 +80,11 @@ class SeasLog
     /**
      * 设置模块目录
      *
-     * @param $module
+     * @param $logger
      *
      * @return bool
      */
-    static public function setLogger($module)
+    static public function setLogger($logger)
     {
         return true;
     }
@@ -88,12 +92,12 @@ class SeasLog
     /**
      * 手动清除logger的stream流
      *
-     * @param $model
-     * @param $logger
+     * @param int    $model
+     * @param string $logger
      *
      * @return bool
      */
-    static public function closeLoggerStream($level = SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN, $name = 'logger_name');
+    static public function closeLoggerStream($model = SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL, $logger)
     {
         return true;
     }
@@ -126,6 +130,31 @@ class SeasLog
     static public function getDatetimeFormat()
     {
         return 'the datetimeFormat';
+    }
+
+    /**
+     * 设置请求变量
+     *
+     * @param $key
+     * @param $value
+     *
+     * @return bool
+     */
+    static public function setRequestVariable($key, $value)
+    {
+        return true;
+    }
+
+    /**
+     * 获取请求变量
+     *
+     * @param $key
+     *
+     * @return string
+     */
+    static public function getRequestVariable($key)
+    {
+        return '';
     }
 
     /**
@@ -182,110 +211,136 @@ class SeasLog
     /**
      * 记录debug日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function debug($message, array $content = array(), $module = '')
+    static public function debug($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_DEBUG
+        return true;
     }
 
     /**
      * 记录info日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function info($message, array $content = array(), $module = '')
+    static public function info($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_INFO
+        return true;
     }
 
     /**
      * 记录notice日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function notice($message, array $content = array(), $module = '')
+    static public function notice($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_NOTICE
+        return true;
     }
 
     /**
      * 记录warning日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function warning($message, array $content = array(), $module = '')
+    static public function warning($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_WARNING
+        return true;
     }
 
     /**
      * 记录error日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function error($message, array $content = array(), $module = '')
+    static public function error($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_ERROR
+        return true;
     }
 
     /**
      * 记录critical日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function critical($message, array $content = array(), $module = '')
+    static public function critical($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_CRITICAL
+        return true;
     }
 
     /**
      * 记录alert日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function alert($message, array $content = array(), $module = '')
+    static public function alert($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_ALERT
+        return true;
     }
 
     /**
      * 记录emergency日志
      *
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function emergency($message, array $content = array(), $module = '')
+    static public function emergency($message, array $context = array(), $module = '')
     {
         #$level = SEASLOG_EMERGENCY
+        return true;
     }
 
     /**
      * 通用日志方法
      *
-     * @param        $level
-     * @param        $message
-     * @param array  $content
-     * @param string $module
+     * @param              $level
+     * @param string|array $message
+     * @param array        $context
+     * @param string       $module
+     *
+     * @return bool
      */
-    static public function log($level, $message, array $content = array(), $module = '')
+    static public function log($level, $message, array $context = array(), $module = '')
     {
-
+        return true;
     }
 
 }

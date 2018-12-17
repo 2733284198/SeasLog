@@ -19,9 +19,18 @@ var_dump(SeasLog::warning('this is a warning log {test}.',array('test' => 'repla
 $aBuffer = SeasLog::getBuffer();
 var_dump(is_array($aBuffer));
 var_dump(count($aBuffer) >= 1);
+
+$bool = false;
 foreach ($aBuffer as $buffer) {
-    var_dump(count($buffer) == 4);
+    if (is_array($buffer)) {
+        $bool = count($buffer) >= 1;
+    } else {
+        $bool = $buffer >= 0;
+    }
+
+    if (!$bool) break;
 }
+var_dump($bool);
 ?>
 --EXPECT--
 bool(true)
