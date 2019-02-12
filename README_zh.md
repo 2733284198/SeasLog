@@ -196,6 +196,28 @@ seaslog.throw_exception = 1
 
 ;是否开启忽略SeasLog自身warning  1开启(默认) 0否
 seaslog.ignore_warning = 1
+
+;是否开启性能追踪 1开启 0关闭(默认)
+seaslog.trace_performance = 0
+
+;性能追踪时的千分比采样率
+;默认10，即百分之一
+seaslog.trace_performance_sample_rate = 10
+
+;性能追踪时的开始层级 默认从第1层开始
+seaslog.trace_performance_start_depth = 1
+
+;性能追踪时深度层级 默认5层
+seaslog.trace_performance_max_depth = 5
+
+;性能追踪时每层的函数最大数 按wall_time降序排列top 默认top5
+seaslog.trace_performance_max_functions_per_depth = 5
+
+;性能追踪时当前请求执行时间的记录阈值 只有当请求执行时间大于该值时，才记录性能日志 默认1000ms
+seaslog.trace_performance_min_wall_time = 1000
+
+;性能追踪时每个方法执行时间的记录阈值 只有当方法执行时间大于该值时，才参与计算 默认10ms
+seaslog.trace_performance_min_function_wall_time = 10
 ```
 > `seaslog.disting_folder = 1` 开启以目录分文件，即logger以目录区分。当关闭时，logger以下划线拼接时间, 如default_20180211.log。
 
@@ -231,6 +253,17 @@ seaslog.ignore_warning = 1
 
 > `seaslog.ignore_warning = 1` 开启忽略SeasLog自身的警告。当出现目录权限或接收服务器端口不通等情况时，将进行忽略；关闭时，将抛出警告。
 
+> `seaslog.trace_performance = 1` 开启性能追踪功能。性能日志如:
+```sh
+2019-01-30 11:46:53 | INFO | 91390 | 5c518ea46e010 | 1548848813.299 | {"main()":{"wt":8848,"mu":20712},"1":[{"cm":"Class0::Method0","ct":2,"wt":2007,"mu":192},{"cm":"Class1::Method1","ct":1,"wt":1002,"mu":192},{"cm":"Class2::Method2","ct":1,"wt":1001,"mu":192},{"cm":"Class3::Method3","ct":1,"wt":1000,"mu":192},{"cm":"Class4::Method4","ct":1,"wt":1000,"mu":192}],"2":[{"cm":"Class5::Method5","ct":1,"wt":1000,"mu":192}],"3":[{"cm":"Class5::Recursion","ct":1,"wt":1000,"mu":3248}],"4":[{"cm":"Class5::Recursion","ct":1,"wt":1000,"mu":2952}],"5":[{"cm":"Class5::Recursion","ct":1,"wt":1000,"mu":2656}]}
+
+cm => function_name (类名::方法名)
+wt => wall_time (ms)
+mu => memory_usage (byte)
+ct => call_times (方法调用计数)
+
+```
+
 ### 自定义日志模板
 很多朋友在使用过程中提到自定义日志模板的需求，于是`SeasLog`自1.7.2版本开始，拥有了这个能力，允许用户自定义日志的模板，
 同时在模板中可以使用`SeasLog`预置的诸多预设变量，参照[预设变量表](#预设变量表)。
@@ -257,7 +290,7 @@ seaslog.ignore_warning = 1
 * `%F` - FileName:LineNo 文件名:行号，如`UserService.php:118`。
 * `%U` - MemoryUsage 当前内容使用量，单位byte。调用`zend_memory_usage`。
 * `%u` - PeakMemoryUsage 当前内容使用峰值量，单位byte。调用`zend_memory_peak_usage`。
-* `%C` - `TODO` Class::Action 类名::方法名，如`UserService::getUserInfo`。
+* `%C` - Class::Action 类名::方法名，如`UserService::getUserInfo`。不在类中使用时，记录函数名
 
 ## 使用
 

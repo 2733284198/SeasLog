@@ -34,6 +34,7 @@ ZEND_GET_MODULE(seaslog)
 #include "StreamWrapper.h"
 #include "Appender.h"
 #include "Analyzer.h"
+#include "Performance.h"
 #include "Common.h"
 
 zend_class_entry *seaslog_ce;
@@ -192,12 +193,20 @@ STD_PHP_INI_BOOLEAN("seaslog.throw_exception", "1", PHP_INI_ALL, OnUpdateBool, t
 
 STD_PHP_INI_BOOLEAN("seaslog.ignore_warning", "1", PHP_INI_ALL, OnUpdateBool, ignore_warning, zend_seaslog_globals, seaslog_globals)
 
+STD_PHP_INI_BOOLEAN("seaslog.trace_performance", "0", PHP_INI_SYSTEM, OnUpdateBool, trace_performance, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_sample_rate", "10", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_sample_rate, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_start_depth", "1", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_start_depth, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_max_depth", "5", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_max_depth, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_max_functions_per_depth", "5", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_max_functions_per_depth, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_min_wall_time", "1000", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_min_wall_time, zend_seaslog_globals, seaslog_globals)
+STD_PHP_INI_ENTRY("seaslog.trace_performance_min_function_wall_time", "10", PHP_INI_ALL, OnUpdateLongGEZero, trace_performance_min_function_wall_time, zend_seaslog_globals, seaslog_globals)
 
 PHP_INI_END()
 
 static PHP_GINIT_FUNCTION(seaslog)
 {
     memset(seaslog_globals, 0, sizeof(zend_seaslog_globals));
+    seaslog_globals->frame_free_list = NULL;
 }
 
 static PHP_GSHUTDOWN_FUNCTION(seaslog)
@@ -254,6 +263,7 @@ PHP_MINIT_FUNCTION(seaslog)
     initExceptionHooks(TSRMLS_C);
     initBufferSwitch(TSRMLS_C);
     initRemoteTimeout(TSRMLS_C);
+    initZendHooks(TSRMLS_C);
 
     return SUCCESS;
 }
@@ -262,6 +272,7 @@ PHP_MSHUTDOWN_FUNCTION(seaslog)
 {
     recoveryErrorHooks(TSRMLS_C);
     recoveryExceptionHooks(TSRMLS_C);
+    recoveryZendHooks(TSRMLS_C);
 
     UNREGISTER_INI_ENTRIES();
 
@@ -285,12 +296,16 @@ PHP_RINIT_FUNCTION(seaslog)
     seaslog_init_logger(TSRMLS_C);
     seaslog_init_buffer(TSRMLS_C);
     seaslog_init_stream_list(TSRMLS_C);
+
+    seaslog_rinit_performance(TSRMLS_C);
+
     SEASLOG_G(initRComplete) = SEASLOG_INITR_COMPLETE_YES;
     return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(seaslog)
 {
+    seaslog_clear_performance(seaslog_ce TSRMLS_CC);
     seaslog_shutdown_buffer(SEASLOG_BUFFER_RE_INIT_NO TSRMLS_CC);
     seaslog_clear_buffer(TSRMLS_C);
     seaslog_clear_logger(TSRMLS_C);
@@ -308,7 +323,16 @@ PHP_RSHUTDOWN_FUNCTION(seaslog)
 PHP_MINFO_FUNCTION(seaslog)
 {
     php_info_print_table_start();
-    php_info_print_table_header(2, "SeasLog support", "Enabled");
+
+    if (PG(expose_php) && !sapi_module.phpinfo_as_text)
+    {
+        php_info_print_table_header(2, "SeasLog support", SEASLOG_LOGO_IMG"enabled");
+    }
+    else
+    {
+        php_info_print_table_header(2, "SeasLog support", "Enabled");
+    }
+
     php_info_print_table_row(2, "SeasLog Version", SEASLOG_VERSION);
     php_info_print_table_row(2, "SeasLog Author", SEASLOG_AUTHOR);
     php_info_print_table_row(2, "SeasLog Supports", SEASLOG_SUPPORTS);
@@ -372,61 +396,61 @@ static inline int seaslog_log_by_level_common_ex(int argc, int check_argc, char 
 
     switch (Z_TYPE_P(messages))
     {
-        case IS_ARRAY:
+    case IS_ARRAY:
+    {
+        msght = Z_ARRVAL_P(messages);
+        ZEND_HASH_FOREACH_KEY_VAL(msght, num_key, str_key, pzval)
+        {
+            zend_string *s = zval_get_string(pzval);
+            if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, ZSTR_VAL(s), ZSTR_LEN(s), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
             {
-                msght = Z_ARRVAL_P(messages);
-                ZEND_HASH_FOREACH_KEY_VAL(msght, num_key, str_key, pzval)
-                {
-                    zend_string *s = zval_get_string(pzval);
-                    if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, ZSTR_VAL(s), ZSTR_LEN(s), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
-                    {
-                        return FAILURE;
-                    }
-                    zend_string_release(s);
-                }
-                ZEND_HASH_FOREACH_END();
+                return FAILURE;
             }
-            break;
-        case IS_STRING:
-        default:
-            {
-                zend_string *s = zval_get_string(messages);
-                if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, ZSTR_VAL(s), ZSTR_LEN(s), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
-                {
-                    zend_string_release(s);
-                    return FAILURE;
-                }
-                zend_string_release(s);
-            }
+            zend_string_release(s);
+        }
+        ZEND_HASH_FOREACH_END();
+    }
+    break;
+    case IS_STRING:
+    default:
+    {
+        zend_string *s = zval_get_string(messages);
+        if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, ZSTR_VAL(s), ZSTR_LEN(s), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
+        {
+            zend_string_release(s);
+            return FAILURE;
+        }
+        zend_string_release(s);
+    }
     }
 
 #else
 
     switch (Z_TYPE_P(messages))
     {
-        case IS_ARRAY:
-            {
-                msght = Z_ARRVAL_P(messages);
+    case IS_ARRAY:
+    {
+        msght = Z_ARRVAL_P(messages);
 
-                zend_hash_internal_pointer_reset(msght);
-                while (zend_hash_get_current_data(msght, (void **)&ppzval) == SUCCESS)
-                {
-                    convert_to_string_ex(ppzval);
-                    if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, Z_STRVAL_PP(ppzval), Z_STRLEN_PP(ppzval), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
-                    {
-                        return FAILURE;
-                    }
-                    zend_hash_move_forward(msght);
-                }
-            }
-            break;
-        case IS_STRING:
-        default:
-            convert_to_string_ex(&messages);
-            if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, Z_STRVAL_P(messages), Z_STRLEN_P(messages), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
+        zend_hash_internal_pointer_reset(msght);
+        while (zend_hash_get_current_data(msght, (void **)&ppzval) == SUCCESS)
+        {
+            convert_to_string_ex(ppzval);
+            if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, Z_STRVAL_PP(ppzval), Z_STRLEN_PP(ppzval), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
             {
                 return FAILURE;
             }
+            zend_hash_move_forward(msght);
+        }
+    }
+    break;
+    case IS_STRING:
+    default:
+        convert_to_string_ex(&messages);
+        if (FAILURE == seaslog_log_context_ex(argc, check_argc, level, level_int, Z_STRVAL_P(messages), Z_STRLEN_P(messages), context, logger_str, logger_len, seaslog_ce TSRMLS_CC))
+        {
+            return FAILURE;
+        }
     }
 
 #endif
@@ -440,12 +464,12 @@ static inline int seaslog_log_by_level_common_check_context(int argc, int check_
     {
         switch(check_argc)
         {
-            case SEASLOG_LOG_FUNCTION_ARGC_USUAL:
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, "The second argument is not an array");
-                break;
-            case SEASLOG_LOG_FUNCTION_ARGC_UNUSUAL:
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, "The three argument is not an array");
-                break;
+        case SEASLOG_LOG_FUNCTION_ARGC_USUAL:
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "The second argument is not an array");
+            break;
+        case SEASLOG_LOG_FUNCTION_ARGC_UNUSUAL:
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "The three argument is not an array");
+            break;
         }
 
         return FAILURE;

@@ -15,6 +15,7 @@
 */
 
 #include "TemplateFormatter.h"
+#include "Common.h"
 #include "Performance.h"
 #include "Datetime.h"
 #include "Request.h"
@@ -39,6 +40,69 @@
 	smart_str_appendl(xbuf, s, slen);	\
 } while (0)
 
+static smart_str* get_class_and_action(smart_str *result  TSRMLS_DC)
+{
+    char *func;
+    char *cls;
+    int recall_depth = SEASLOG_G(recall_depth);
+    zend_execute_data *execute_data = EG(current_execute_data);
+
+    if (!execute_data || !(execute_data = execute_data->prev_execute_data))
+    {
+        return NULL;
+    }
+
+#if PHP_VERSION_ID >= 70000
+
+    while(recall_depth > 0)
+    {
+        if (execute_data->prev_execute_data != NULL && execute_data->prev_execute_data->func &&
+                ZEND_USER_CODE(execute_data->prev_execute_data->func->common.type)
+           )
+        {
+            execute_data = execute_data->prev_execute_data;
+        }
+        else
+        {
+            break;
+        }
+        recall_depth--;
+    }
+#else
+    while(recall_depth > 0)
+    {
+        if (execute_data->prev_execute_data && execute_data->prev_execute_data->opline)
+        {
+            execute_data = execute_data->prev_execute_data;
+        }
+        else
+        {
+            break;
+        }
+        recall_depth--;
+    }
+#endif
+
+    func = seaslog_performance_get_function_name(execute_data TSRMLS_CC);
+    if (!func)
+    {
+        return NULL;
+    }
+
+    cls = seaslog_performance_get_class_name(execute_data TSRMLS_CC);
+    if (cls)
+    {
+        INS_STRING(result, cls, strlen(cls));
+        INS_STRING(result, "::", 2);
+    }
+
+    INS_STRING(result, func, strlen(func));
+
+    efree(cls);
+    efree(func);
+
+    return result;
+}
 
 void seaslog_init_template(TSRMLS_D)
 {
@@ -74,37 +138,37 @@ int seaslog_spprintf(char **pbuf TSRMLS_DC, int generate_type, char *level, size
 
     switch (generate_type)
     {
-        case SEASLOG_GENERATE_CURRENT_TEMPLATE:
-        case SEASLOG_GENERATE_RE_CURRENT_TEMPLATE:
-            seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(default_template), level, ap);
-            break;
-        case SEASLOG_GENERATE_LEVEL_TEMPLATE:
-            if (strlen(SEASLOG_G(level_template)) == 0 || (level && !strcmp(level, SEASLOG_ALL)))
-            {
-                INS_STRING(&xbuf, SEASLOG_ALL, strlen(SEASLOG_ALL));
-            }
-            else
-            {
-                seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(level_template), level, ap);
-            }
-            break;
-        case SEASLOG_GENERATE_SYSLOG_INFO:
-        case SEASLOG_GENERATE_LOG_INFO:
-            seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(current_template), level, ap);
-            break;
-        default:
-            break;
+    case SEASLOG_GENERATE_CURRENT_TEMPLATE:
+    case SEASLOG_GENERATE_RE_CURRENT_TEMPLATE:
+        seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(default_template), level, ap);
+        break;
+    case SEASLOG_GENERATE_LEVEL_TEMPLATE:
+        if (strlen(SEASLOG_G(level_template)) == 0 || (level && !strcmp(level, SEASLOG_ALL)))
+        {
+            INS_STRING(&xbuf, SEASLOG_ALL, strlen(SEASLOG_ALL));
+        }
+        else
+        {
+            seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(level_template), level, ap);
+        }
+        break;
+    case SEASLOG_GENERATE_SYSLOG_INFO:
+    case SEASLOG_GENERATE_LOG_INFO:
+        seaslog_template_formatter(&xbuf TSRMLS_CC, generate_type, SEASLOG_G(current_template), level, ap);
+        break;
+    default:
+        break;
     }
     va_end(ap);
 
-    if (max_len && SEASLOG_SMART_STR_L(xbuf) > max_len)
+    if (max_len && seaslog_smart_str_get_len(xbuf) > max_len)
     {
         SEASLOG_SMART_STR_L(xbuf) = max_len;
     }
     smart_str_0(&xbuf);
 
     *pbuf = estrdup(SEASLOG_SMART_STR_C(xbuf));
-    len = SEASLOG_SMART_STR_L(xbuf);
+    len = seaslog_smart_str_get_len(xbuf);
 
     smart_str_free(&xbuf);
 
@@ -235,7 +299,7 @@ void seaslog_template_formatter(smart_str *xbuf TSRMLS_DC, int generate_type, co
                     }
                     mic_time(&tmp_buf);
                     s = SEASLOG_SMART_STR_C(tmp_buf);
-                    s_len  = SEASLOG_SMART_STR_L(tmp_buf);
+                    s_len  = seaslog_smart_str_get_len(tmp_buf);
                 }
                 break;
                 case 'Q': //Request uniqid
@@ -264,8 +328,9 @@ void seaslog_template_formatter(smart_str *xbuf TSRMLS_DC, int generate_type, co
                         smart_str_free(&tmp_buf);
                     }
                     get_code_filename_line(&tmp_buf TSRMLS_CC);
+
                     s = SEASLOG_SMART_STR_C(tmp_buf);
-                    s_len  = SEASLOG_SMART_STR_L(tmp_buf);
+                    s_len = seaslog_smart_str_get_len(tmp_buf);
                     break;
                 case 'U': //zend_memory_usage
                     if (SEASLOG_SMART_STR_C(tmp_buf))
@@ -274,7 +339,7 @@ void seaslog_template_formatter(smart_str *xbuf TSRMLS_DC, int generate_type, co
                     }
                     seaslog_memory_usage(&tmp_buf TSRMLS_CC);
                     s = SEASLOG_SMART_STR_C(tmp_buf);
-                    s_len  = SEASLOG_SMART_STR_L(tmp_buf);
+                    s_len = seaslog_smart_str_get_len(tmp_buf);
                     break;
                 case 'u': //peak_memory_usage
                     if (SEASLOG_SMART_STR_C(tmp_buf))
@@ -283,9 +348,25 @@ void seaslog_template_formatter(smart_str *xbuf TSRMLS_DC, int generate_type, co
                     }
                     seaslog_peak_memory_usage(&tmp_buf TSRMLS_CC);
                     s = SEASLOG_SMART_STR_C(tmp_buf);
-                    s_len  = SEASLOG_SMART_STR_L(tmp_buf);
+                    s_len  = seaslog_smart_str_get_len(tmp_buf);
                     break;
-                case 'C': //TODO Class::Action
+                case 'C':
+                    if (SEASLOG_SMART_STR_C(tmp_buf))
+                    {
+                        smart_str_free(&tmp_buf);
+                    }
+
+                    if (get_class_and_action(&tmp_buf TSRMLS_CC))
+                    {
+                        s = SEASLOG_SMART_STR_C(tmp_buf);
+                        s_len  = seaslog_smart_str_get_len(tmp_buf);
+                    }
+                    else
+                    {
+                        s = S_NULL;
+                        s_len = S_NULL_LEN;
+                    }
+                    break;
                 case NUL:
                     continue;
                 default:
@@ -307,23 +388,23 @@ skip_output:
 
     switch(generate_type)
     {
-        case SEASLOG_GENERATE_LOG_INFO:
-        case SEASLOG_GENERATE_SYSLOG_INFO:
-            INS_STRING(xbuf, SEASLOG_LOG_LINE_FEED_STR, SEASLOG_LOG_LINE_FEED_LEN);
-            break;
-        case SEASLOG_GENERATE_CURRENT_TEMPLATE:
+    case SEASLOG_GENERATE_LOG_INFO:
+    case SEASLOG_GENERATE_SYSLOG_INFO:
+        INS_STRING(xbuf, SEASLOG_LOG_LINE_FEED_STR, SEASLOG_LOG_LINE_FEED_LEN);
+        break;
+    case SEASLOG_GENERATE_CURRENT_TEMPLATE:
+    {
+        if (!level_format_start)
         {
-            if (!level_format_start)
-            {
-                level_format_index = 0;
-            }
-            if (!level_format_over)
-            {
-                level_template[level_format_index] = '\0';
-            }
-            SEASLOG_G(level_template) = estrdup(level_template);
-            break;
+            level_format_index = 0;
         }
+        if (!level_format_over)
+        {
+            level_template[level_format_index] = '\0';
+        }
+        SEASLOG_G(level_template) = estrdup(level_template);
+        break;
+    }
     }
 
     if (!EXIST_CHAR(xbuf))

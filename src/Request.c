@@ -251,6 +251,11 @@ void get_code_filename_line(smart_str *result TSRMLS_DC)
     {
         zend_execute_data *ptr = EG(current_execute_data);
 
+        if (!ptr)
+        {
+            return;
+        }
+
         while(recall_depth >= 0)
         {
             if (ptr->prev_execute_data != NULL && ptr->prev_execute_data->func &&
@@ -291,6 +296,11 @@ void get_code_filename_line(smart_str *result TSRMLS_DC)
     else
     {
         zend_execute_data *ptr = EG(current_execute_data);
+        if (!ptr)
+        {
+            return;
+        }
+
         while(recall_depth > 0)
         {
             if (ptr->prev_execute_data && ptr->prev_execute_data->opline)
@@ -316,7 +326,11 @@ void get_code_filename_line(smart_str *result TSRMLS_DC)
         }
     }
 
+#if PHP_VERSION_ID >= 50400
     php_basename(ret, strlen(ret), NULL, 0, &filename, &filename_len TSRMLS_CC);
+#else
+    php_basename((char *)ret, strlen(ret), NULL, 0, &filename, &filename_len TSRMLS_CC);
+#endif
 
     smart_str_appendl(result,filename,filename_len);
     smart_str_appendc(result,':');

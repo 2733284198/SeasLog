@@ -121,8 +121,8 @@ int seaslog_clear_stream(int destroy, int model, char *opt TSRMLS_DC)
         ZEND_HASH_FOREACH_NUM_KEY_PTR(ht, num_key, stream_entry)
         {
             if (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL == model
-                || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
-            )
+                    || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
+               )
             {
                 stream = stream_entry->stream;
                 if (stream)
@@ -139,7 +139,7 @@ int seaslog_clear_stream(int destroy, int model, char *opt TSRMLS_DC)
 
         if (SEASLOG_STREAM_LIST_DESTROY_YES == destroy)
         {
-            EX_ARRAY_DESTROY(&SEASLOG_G(stream_list));
+            SEASLOG_ARRAY_DESTROY(SEASLOG_G(stream_list));
         }
     }
 #else
@@ -151,8 +151,8 @@ int seaslog_clear_stream(int destroy, int model, char *opt TSRMLS_DC)
         while (zend_hash_get_current_data(ht, (void **)&stream_entry) == SUCCESS)
         {
             if (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ALL == model
-                || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
-            )
+                    || (SEASLOG_CLOSE_LOGGER_STREAM_MOD_ASSIGN == model && strstr(stream_entry->opt, opt))
+               )
             {
                 zend_hash_get_current_key_ex(ht, NULL, NULL, &num_key, 1, NULL);
                 stream = stream_entry->stream;
@@ -177,7 +177,7 @@ int seaslog_clear_stream(int destroy, int model, char *opt TSRMLS_DC)
 
         if (SEASLOG_STREAM_LIST_DESTROY_YES == destroy)
         {
-            EX_ARRAY_DESTROY(&(SEASLOG_G(stream_list)));
+            SEASLOG_ARRAY_DESTROY(SEASLOG_G(stream_list));
         }
     }
 #endif
